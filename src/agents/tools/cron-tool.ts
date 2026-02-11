@@ -229,8 +229,41 @@ export function createCronTool(opts?: CronToolOptions): AnyAgentTool {
     label: "Cron",
     name: "cron",
     description: `Manage Gateway cron jobs (status/list/add/update/remove/run/runs) and send wake events.
+Schedule tasks for a future instance of yourself.
 
-ACTIONS:
+== QUICK GUIDE: REMINDERS ==
+
+For reminders, ALWAYS use: sessionTarget="main", payload.kind="systemEvent", wakeMode="now".
+Do NOT include a "delivery" field — delivery is only for isolated sessions and will error on main.
+Write the systemEvent text as the reminder itself — make it read naturally when delivered later.
+When the job fires, the text is injected as a system event and you are woken immediately.
+Instead of replying HEARTBEAT_OK, reply with the reminder message for the user.
+
+Reminder example (user says "Remind me to call John in 20 minutes"):
+{
+  "action": "add",
+  "job": {
+    "name": "Call John reminder",
+    "schedule": { "kind": "at", "at": "<ISO-8601 UTC timestamp 20m from now>" },
+    "sessionTarget": "main",
+    "payload": { "kind": "systemEvent", "text": "Reminder: call John" },
+    "wakeMode": "now"
+  }
+}
+
+Recurring task example (user says "Check calendar daily at 9am"):
+{
+  "action": "add",
+  "job": {
+    "name": "Morning check",
+    "schedule": { "kind": "cron", "expr": "0 9 * * *", "tz": "America/Los_Angeles" },
+    "sessionTarget": "isolated",
+    "payload": { "kind": "agentTurn", "message": "Check calendar. If meetings exist, use message tool to notify user." },
+    "delivery": { "mode": "none" }
+  }
+}
+
+== ACTIONS ==
 - status: Check cron scheduler status
 - list: List jobs (use includeDisabled:true to include disabled)
 - add: Create job (requires job object, see schema below)
@@ -240,17 +273,18 @@ ACTIONS:
 - runs: Get job run history (requires jobId)
 - wake: Send wake event (requires text, optional mode)
 
-JOB SCHEMA (for add action):
+== JOB SCHEMA (for add action) ==
 {
   "name": "string (optional)",
   "schedule": { ... },      // Required: when to run
   "payload": { ... },       // Required: what to execute
   "delivery": { ... },      // Optional: announce summary (isolated only)
   "sessionTarget": "main" | "isolated",  // Required
+  "wakeMode": "now" | "next-heartbeat",  // Optional: "now" wakes immediately (default for main+systemEvent)
   "enabled": true | false   // Optional, default true
 }
 
-SCHEDULE TYPES (schedule.kind):
+== SCHEDULE TYPES (schedule.kind) ==
 - "at": One-shot at absolute time
   { "kind": "at", "at": "<ISO-8601 timestamp>" }
 - "every": Recurring interval
@@ -260,23 +294,28 @@ SCHEDULE TYPES (schedule.kind):
 
 ISO timestamps without an explicit timezone are treated as UTC.
 
-PAYLOAD TYPES (payload.kind):
-- "systemEvent": Injects text as system event into session
+== PAYLOAD TYPES (payload.kind) ==
+- "systemEvent": Injects text as system event into the main session — USE THIS FOR REMINDERS
   { "kind": "systemEvent", "text": "<message>" }
+  When wakeMode is "now", the agent is woken immediately and sees the text as a system event.
+  Reply with the relevant message for the user (do NOT reply HEARTBEAT_OK).
 - "agentTurn": Runs agent with message (isolated sessions only)
   { "kind": "agentTurn", "message": "<prompt>", "model": "<optional>", "thinking": "<optional>", "timeoutSeconds": <optional> }
 
-DELIVERY (isolated-only, top-level):
+== DELIVERY (isolated-only, top-level) ==
   { "mode": "none|announce", "channel": "<optional>", "to": "<optional>", "bestEffort": <optional-bool> }
+  - "announce": Your text response IS the delivered message. DO NOT use the message tool.
+  - "none": Runs silently. Use tools (like message) explicitly if needed.
   - Default for isolated agentTurn jobs (when delivery omitted): "announce"
   - If the task needs to send to a specific chat/recipient, set delivery.channel/to here; do not call messaging tools inside the run.
 
-CRITICAL CONSTRAINTS:
-- sessionTarget="main" REQUIRES payload.kind="systemEvent"
+== CRITICAL CONSTRAINTS ==
+- sessionTarget="main" REQUIRES payload.kind="systemEvent" (no delivery field allowed)
 - sessionTarget="isolated" REQUIRES payload.kind="agentTurn"
-Default: prefer isolated agentTurn jobs unless the user explicitly wants a main-session system event.
+- For reminders: ALWAYS use main + systemEvent + wakeMode "now" (no delivery).
+- For complex autonomous tasks: use isolated + agentTurn.
 
-WAKE MODES (for wake action):
+== WAKE MODES (for wake action) ==
 - "next-heartbeat" (default): Wake on next heartbeat
 - "now": Wake immediately
 

@@ -7,7 +7,7 @@ metadata:
     "openclaw":
       {
         "emoji": "🗣️",
-        "requires": { "bins": ["sag"], "env": ["ELEVENLABS_API_KEY"] },
+        "requires": { "bins": ["sag", "ffmpeg"], "env": ["ELEVENLABS_API_KEY"] },
         "primaryEnv": "ELEVENLABS_API_KEY",
         "install":
           [
@@ -68,14 +68,15 @@ Confirm voice + speaker before long output.
 
 ## Chat voice responses
 
-When Peter asks for a "voice" reply (e.g., "crazy scientist voice", "explain in voice"), generate audio and send it:
+When asked for a voice reply, generate audio and send it. For Telegram/WhatsApp, convert to OGG for proper voice bubble rendering:
 
 ```bash
-# Generate audio file
 sag -v Clawd -o /tmp/voice-reply.mp3 "Your message here"
+ffmpeg -i /tmp/voice-reply.mp3 -c:a libopus -b:a 64k /tmp/voice-reply.ogg
 
 # Then include in reply:
-# MEDIA:/tmp/voice-reply.mp3
+# [[audio_as_voice]]
+# MEDIA:/tmp/voice-reply.ogg
 ```
 
 Voice character tips:
